@@ -701,11 +701,6 @@ var isPlainTextOnlyPaste = event => {
   return event.clipboardData && event.clipboardData.getData('text/plain') !== '' && event.clipboardData.types.length === 1;
 };
 /**
- * Check if a DOM node is a TextNode without content.
- */
-
-var isEmptyTextNode = node => node.nodeType === 3 && /^\s$/.test(node.textContent);
-/**
  * Normalize a DOM point so that it always refers to a text node.
  */
 
@@ -831,11 +826,10 @@ var Editable = props => {
 
     if (!selection && !hasDomSelection) {
       return;
-    }
+    } // If the DOM selection is already correct, we're done.
 
-    var newDomRange = selection && ReactEditor.toDOMRange(editor, selection); // If the DOM selection is already correct, we're done.
 
-    if (hasDomSelection && newDomRange && isRangeEqual(domSelection.getRangeAt(0), newDomRange)) {
+    if (hasDomSelection && selection && slate.Range.equals(ReactEditor.toSlateRange(editor, domSelection), selection)) {
       return;
     } // Otherwise the DOM selection is out of sync, so update it.
 
@@ -843,6 +837,7 @@ var Editable = props => {
     var el = ReactEditor.toDOMNode(editor, editor);
     state.isUpdatingSelection = true;
     domSelection.removeAllRanges();
+    var newDomRange = selection && ReactEditor.toDOMRange(editor, selection);
 
     if (newDomRange) {
       domSelection.addRange(newDomRange);
@@ -1046,7 +1041,6 @@ var Editable = props => {
       } = window.document;
       var el = ReactEditor.toDOMNode(editor, editor);
       var domSelection = window.getSelection();
-      var domRange = domSelection && domSelection.rangeCount > 0 && domSelection.getRangeAt(0);
 
       if (activeElement === el) {
         state.latestElement = activeElement;
@@ -1055,8 +1049,8 @@ var Editable = props => {
         IS_FOCUSED.delete(editor);
       }
 
-      if (domRange && hasEditableTarget(editor, domRange.startContainer) && hasEditableTarget(editor, domRange.endContainer)) {
-        var range = ReactEditor.toSlateRange(editor, domRange);
+      if (domSelection && hasEditableTarget(editor, domSelection.anchorNode) && hasEditableTarget(editor, domSelection.focusNode)) {
+        var range = ReactEditor.toSlateRange(editor, domSelection);
         slate.Transforms.select(editor, range);
       } else {
         slate.Transforms.deselect(editor);
@@ -1525,14 +1519,6 @@ var Editable = props => {
 
 var defaultDecorate = () => [];
 /**
- * Check if two DOM range objects are equal.
- */
-
-
-var isRangeEqual = (a, b) => {
-  return a.startContainer === b.startContainer && a.startOffset === b.startOffset && a.endContainer === b.endContainer && a.endOffset === b.endOffset || a.startContainer === b.endContainer && a.startOffset === b.endOffset && a.endContainer === b.startContainer && a.endOffset === b.startOffset;
-};
-/**
  * Check if the target is in the editor.
  */
 
@@ -1927,17 +1913,22 @@ var ReactEditor = {
       anchor,
       focus
     } = range;
+    var isBackward = slate.Range.isBackward(range);
     var domAnchor = ReactEditor.toDOMPoint(editor, anchor);
     var domFocus = slate.Range.isCollapsed(range) ? domAnchor : ReactEditor.toDOMPoint(editor, focus);
     var domRange = window.document.createRange();
-    var [startNode, startOffset] = slate.Range.isBackward(range) ? domFocus : domAnchor;
-    var [endNode, endOffset] = slate.Range.isBackward(range) ? domAnchor : domFocus; // A slate Point pointing to a Leaf without text will always have an offset of 0.
+    var [startNode, startOffset] = isBackward ? domFocus : domAnchor;
+    var [endNode, endOffset] = isBackward ? domAnchor : domFocus; // A slate Point pointing to a Leaf without text will always have an offset of 0.
     // A native DOM selection point on the other hand will have an offset of 1.
     // Therefore, DOM selection points are given an offset of 1 instead of 0.
     // Not doing this causes issues when backward selcting (see issue #3544).
 
-    domRange.setStart(startNode, isEmptyTextNode(startNode) ? 1 : startOffset);
-    domRange.setEnd(endNode, isEmptyTextNode(endNode) ? 1 : endOffset);
+    var startEl = isDOMElement(startNode) ? startNode : startNode.parentElement;
+    var isStartAtZeroWidth = !!startEl.getAttribute('data-slate-zero-width');
+    var endEl = isDOMElement(endNode) ? endNode : endNode.parentElement;
+    var isEndAtZeroWidth = !!endEl.getAttribute('data-slate-zero-width');
+    domRange.setStart(startNode, isStartAtZeroWidth ? 1 : startOffset);
+    domRange.setEnd(endNode, isEndAtZeroWidth ? 1 : endOffset);
     return domRange;
   },
 
