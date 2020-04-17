@@ -31,10 +31,6 @@ export declare const isDOMText: (value: any) => value is DOMText;
  */
 export declare const isPlainTextOnlyPaste: (event: ClipboardEvent) => boolean | null;
 /**
- * Check if a DOM node is a TextNode without content.
- */
-export declare const isEmptyTextNode: (node: DOMNode) => Boolean;
-/**
  * Normalize a DOM point so that it always refers to a text node.
  */
 export declare const normalizeDOMPoint: (domPoint: DOMPoint) => DOMPoint;
